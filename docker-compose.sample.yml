@@ -1,0 +1,12 @@
+version: '3.8'
+services:
+  pgbouncer:
+    image: edoburu/pgbouncer:1.17.0
+    container_name: pgbouncer
+    restart: unless-stopped
+    ports:
+      - "6432:6432"
+    volumes:
+      - /srv/pgbouncer:/etc/pgbouncer:ro
+    environment:
+      - PGB_USERLIST=/etc/pgbouncer/userlist.txt

@@ -1,0 +1,19 @@
+version: "3.8"
+services:
+  pgbouncer:
+    image: edoburu/pgbouncer:1.15.0
+    container_name: pgbouncer
+    restart: unless-stopped
+    networks:
+      - local
+    ports:
+      - "127.0.0.1:6432:6432"
+    volumes:
+      - ./pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
+      - ./userlist.txt:/etc/pgbouncer/userlist.txt:ro
+    environment:
+      - TZ=UTC
+networks:
+  local:
+    driver: bridge
+      - /srv/pgbouncer/var_log_pgbouncer:/var/log/pgbouncer:rw
