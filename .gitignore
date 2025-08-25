@@ -1,0 +1,7 @@
+/backups/
+/tmp/
+/*.tgz
+*.env
+*.pem
+pgbouncer.env
+pgbouncer.env

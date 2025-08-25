@@ -1,0 +1,2 @@
+"admin" "md5f6c4c3e2a3b8c1d9e8e9f1a2b3c4d5e6"
+"eddji_erp" "md5d41d8cd98f00b204e9800998ecf8427e"

@@ -1,0 +1,13 @@
+services:
+  pgbouncer:
+    image: edoburu/pgbouncer:1.15.0
+    container_name: pgbouncer
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6432:6432"
+    volumes:
+      - /srv/pgbouncer/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
+      - /srv/pgbouncer/userlist.txt:/etc/pgbouncer/userlist.txt:ro
+      - /srv/pgbouncer/var_log_pgbouncer:/var/log/pgbouncer:rw
+    environment:
+      - TZ=UTC
