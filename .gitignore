@@ -1,0 +1,7 @@
+# Secrets and runtime
+pgbouncer.env
+*.env
+/srv/pgbouncer/userlist.txt
+/tmp/*.log
+backups/*
+*.tgz

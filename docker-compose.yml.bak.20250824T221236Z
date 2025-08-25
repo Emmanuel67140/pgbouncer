@@ -1,0 +1,17 @@
+services:
+  pgbouncer:
+    image: edoburu/pgbouncer:1.15.0
+    container_name: pgbouncer
+    restart: unless-stopped
+    network_mode: "host"
+    volumes:
+      - /srv/pgbouncer/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
+      - /srv/pgbouncer/userlist.txt:/etc/pgbouncer/userlist.txt:ro
+      - /srv/pgbouncer/var_log_pgbouncer:/var/log/pgbouncer:rw
+    environment:
+      - TZ=UTC
+    healthcheck:
+      test: ["CMD-SHELL", "docker run --rm --network host -e PGPASSWORD='REPLACE_ADMIN_PGPW' postgres:15 psql -qAt -h 127.0.0.1 -p 6432 -U admin -d pgbouncer -c \"SELECT 1\" >/dev/null 2>&1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
