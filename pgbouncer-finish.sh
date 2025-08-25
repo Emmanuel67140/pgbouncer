@@ -2,40 +2,34 @@
 set -euo pipefail
 IFS=$'\n\t'
 
-# Try to source env from /etc/pgbouncer/pgbouncer.env or local pgbouncer.env
-if [ -f /etc/pgbouncer/pgbouncer.env ]; then
-  # shellcheck disable=SC1091
-  . /etc/pgbouncer/pgbouncer.env
-elif [ -f "$(dirname "$0")/pgbouncer.env" ]; then
-  . "$(dirname "$0")/pgbouncer.env"
-else
-  echo "ERREUR: fichier \$ENVFILE introuvable ou /etc/pgbouncer/pgbouncer.env manquant"
-  echo "Place un fichier /etc/pgbouncer/pgbouncer.env avec ADMIN_PW, APP_USER, APP_DB, APP_PW"
-  exit 1
+ENVFILE=/etc/pgbouncer/pgbouncer.env
+if [ ! -f "$ENVFILE" ]; then
+  echo "ERREUR: fichier ENV introuvable: $ENVFILE" >&2
+  exit 2
 fi
+# shellcheck disable=SC1090
+source "$ENVFILE"
 
-# Defaults (au cas où)
-COMPOSE_FILE="${COMPOSE_FILE:-/home/deploy/pgbouncer/docker-compose.yml}"
-USERLIST_HOST="${USERLIST_HOST:-/srv/pgbouncer/userlist.txt}"
-
-command -v docker >/dev/null || { echo "docker required"; exit 1; }
-command -v md5sum >/dev/null || { echo "md5sum required"; exit 1; }
+# Sanity checks
+command -v docker >/dev/null || { echo "docker absent"; exit 3; }
+command -v md5sum >/dev/null || { echo "md5sum absent"; exit 4; }
 
 timestamp() { date -u +%Y%m%dT%H%M%SZ; }
 
-# Backup existing userlist
+# Backup userlist if exists
 if [ -f "$USERLIST_HOST" ]; then
+  sudo mkdir -p "$(dirname "$USERLIST_HOST")"
   BACKUP="${USERLIST_HOST}.bak.$(timestamp)"
   sudo cp "$USERLIST_HOST" "$BACKUP"
   echo "Backup saved: $BACKUP"
 fi
 
-# compute md5 hashes (Postgres md5 style: md5(password+username))
+# Compute hashes (md5 used by pgbouncer)
 ADMIN_HASH=$(printf '%s%s' "$ADMIN_PW" "admin" | md5sum | cut -d' ' -f1)
 APP_HASH=$(printf '%s%s' "$APP_PW" "$APP_USER" | md5sum | cut -d' ' -f1)
 
-# write atomically
-TMP="$(mktemp /tmp/userlist.XXX)"
+# Prepare tmp file and write userlist atomically
+TMP="$(mktemp /tmp/userlist.XXXXX)"
 cat > "$TMP" <<USERLIST
 "admin" "md5$ADMIN_HASH"
 "$APP_USER" "md5$APP_HASH"
@@ -46,12 +40,13 @@ sudo mv "$TMP" "$USERLIST_HOST"
 sudo chown root:root "$USERLIST_HOST"
 sudo chmod 644 "$USERLIST_HOST"
 echo "Wrote $USERLIST_HOST:"
-sudo sed -n '1,200p' "$USERLIST_HOST" || true
+sudo sed -n '1,200p' "$USERLIST_HOST"
 
-# try RELOAD via admin user; if fail, recreate container
+# Try RELOAD via pgBouncer admin; if fails restart container
+echo "Attempting RELOAD via admin..."
 if docker run --rm --network host -e PGPASSWORD="$ADMIN_PW" postgres:15 \
      psql -qAt -h 127.0.0.1 -p 6432 -U admin -d pgbouncer -c "RELOAD;" >/dev/null 2>&1; then
-  echo "RELOAD succeeded"
+  echo "RELOAD ok"
 else
   echo "RELOAD failed -> restarting container"
   sudo docker compose -f "$COMPOSE_FILE" down --remove-orphans || true
@@ -59,13 +54,13 @@ else
   sudo docker compose -f "$COMPOSE_FILE" up -d --force-recreate --no-deps pgbouncer
 fi
 
-# short verification (do not fail the script)
-echo "--- inside container userlist ---"
+# Short verification (non-fatal)
+echo "=== inside container userlist ==="
 sudo docker exec pgbouncer sh -lc 'cat /etc/pgbouncer/userlist.txt || true; stat -c "%U:%G %a %n" /etc/pgbouncer/userlist.txt || true'
-echo "--- SHOW USERS (pgbouncer) ---"
+echo "=== SHOW USERS (pgbouncer) ==="
 docker run --rm --network host -e PGPASSWORD="$ADMIN_PW" postgres:15 \
   psql -h 127.0.0.1 -p 6432 -U admin -d pgbouncer -c "SHOW USERS;" || true
-echo "--- test app connection ---"
+echo "=== test app connection ==="
 docker run --rm --network host -e PGPASSWORD="$APP_PW" postgres:15 \
   psql -h 127.0.0.1 -p 6432 -U "$APP_USER" -d "$APP_DB" -c "SELECT 1;" || true
 echo "DONE"
